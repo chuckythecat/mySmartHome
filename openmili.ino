@@ -6,135 +6,61 @@
 #include "PL1167_nRF24.h"
 #include "MiLightRadio.h"
 
-#define CE_PIN 8
-#define CSN_PIN 53
+#define CE_PIN 10
+#define CSN_PIN 9
 
 RF24 radio(CE_PIN, CSN_PIN);
 PL1167_nRF24 prf(radio);
 MiLightRadio mlr(prf);
 
+uint8_t onPacket[7] =     {0xD8, 0xD7, 0xA0, 0x00, 0x01, 0x00, 0x00};
+uint8_t offPacket[7] =    {0xD8, 0xD7, 0xA0, 0x00, 0x02, 0x00, 0x00};
+uint8_t SminusPacket[7] = {0xD8, 0xD7, 0xA0, 0x00, 0x03, 0x00, 0x00};
+uint8_t mPacket[7] =      {0xD8, 0xD7, 0xA0, 0x00, 0x04, 0x00, 0x00};
+uint8_t SplusPacket[7] =  {0xD8, 0xD7, 0xA0, 0x00, 0x05, 0x00, 0x00};
+
 void setup()
 {
-  Serial.begin(115200);
+  Serial.begin(9600);
   printf_begin();
   delay(1000);
   Serial.println("# OpenMiLight Receiver/Transmitter starting");
   mlr.begin();
 }
 
-
-static int dupesPrinted = 0;
-static bool receiving = false;
-static bool escaped = false;
-static uint8_t outgoingPacket[7];
-static uint8_t outgoingPacketPos = 0;
-static uint8_t nibble;
-static enum {
-  IDLE,
-  HAVE_NIBBLE,
-  COMPLETE,
-} state;
-
+int lastrecv;
+int receive;
 void loop()
 {
-  if (receiving) {
-    if (mlr.available()) {
-      printf("\n");
-      uint8_t packet[7];
-      size_t packet_length = sizeof(packet);
-      mlr.read(packet, packet_length);
+  while (Serial.available() == 0) {}     //wait for data available
+  receive = Serial.read();
 
-      for (int i = 0; i < packet_length; i++) {
-        printf("%02X ", packet[i]);
-      }
-    }
-
-    int dupesReceived = mlr.dupesReceived();
-    for (; dupesPrinted < dupesReceived; dupesPrinted++) {
-      printf(".");
-    }
+  Serial.print("I received: ");
+  Serial.println(receive);
+  
+  if (lastrecv == receive) {
+    mlr.resend();
+    Serial.println("resend");
   }
-
-  while (Serial.available()) {
-    char inChar = (char)Serial.read();
-    uint8_t val = 0;
-    bool have_val = true;
-
-    if (inChar >= '0' && inChar <= '9') {
-      val = inChar - '0';
-    } else if (inChar >= 'a' && inChar <= 'f') {
-      val = inChar - 'a' + 10;
-    } else if (inChar >= 'A' && inChar <= 'F') {
-      val = inChar - 'A' + 10;
-    } else {
-      have_val = false;
-    }
-
-    if (!escaped) {
-      if (have_val) {
-        switch (state) {
-          case IDLE:
-            nibble = val;
-            state = HAVE_NIBBLE;
-            break;
-          case HAVE_NIBBLE:
-            if (outgoingPacketPos < sizeof(outgoingPacket)) {
-              outgoingPacket[outgoingPacketPos++] = (nibble << 4) | (val);
-            } else {
-              Serial.println("# Error: outgoing packet buffer full/packet too long");
-            }
-            if (outgoingPacketPos >= sizeof(outgoingPacket)) {
-              state = COMPLETE;
-            } else {
-              state = IDLE;
-            }
-            break;
-          case COMPLETE:
-            Serial.println("# Error: outgoing packet complete. Press enter to send.");
-            break;
-        }
-      } else {
-        switch (inChar) {
-          case ' ':
-          case '\n':
-          case '\r':
-          case '.':
-            if (state == COMPLETE) {
-              mlr.write(outgoingPacket, sizeof(outgoingPacket));
-            }
-            if(inChar != ' ') {
-              outgoingPacketPos = 0;
-              state = IDLE;
-            }
-            if (inChar == '.') {
-              mlr.resend();
-              delay(1);
-            }
-            break;
-          case 'x':
-            Serial.println("# Escaped to extended commands: r - Toggle receiver; Press enter to return to normal mode.");
-            escaped = true;
-            break;
-        }
-      }
-    } else {
-      switch (inChar) {
-        case '\n':
-        case '\r':
-          outgoingPacketPos = 0;
-          state = IDLE;
-          escaped = false;
-          break;
-        case 'r':
-          receiving = !receiving;
-          if (receiving) {
-            Serial.println("# Now receiving");
-          } else {
-            Serial.println("# Now not receiving");
-          }
-          break;
-      }
-    }
+  else if (receive == 49) {
+    mlr.write(onPacket, sizeof(onPacket));
+    Serial.println("ON");
   }
+  else if (receive == 50) {
+    mlr.write(offPacket, sizeof(offPacket));
+    Serial.println("OFF");
+  }
+  else if (receive == 51) {
+    mlr.write(SminusPacket, sizeof(SminusPacket));
+    Serial.println("S-");
+  }
+  else if (receive == 52) {
+    mlr.write(mPacket, sizeof(mPacket));
+    Serial.println("M");
+  }
+  else if (receive == 53) {
+    mlr.write(SplusPacket, sizeof(SplusPacket));
+    Serial.println("S+");
+  }
+  lastrecv = receive;
 }
-

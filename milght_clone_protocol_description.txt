@@ -1,0 +1,18 @@
+Preamble - 3 bytes
+Syncword - 32 bits: 05 0A 55 AA
+Trailer - 4 bits
+CRC ON
+
+7 byte packets:
+      || - argument (brightness from 20 to 2F, other commands - A0)
+      ||    || - command (01 - on
+      ||    ||            02 - off
+      ||    ||            03 - warmer light temp
+      ||    ||            04 - default light temp
+      ||    ||            05 - colder light temp
+      ||    ||            0F - brighntess change)
+      ||    || || - some kind of counter, original remote increments this by 1 after every command
+      ||    || || (i have no idea why)
+D8 D7 A0 00 01 00 00
+
+transmitting on channels 04-4A (4-47), alternating between them, 45 transmittions on each channel (90 transmittions total)
